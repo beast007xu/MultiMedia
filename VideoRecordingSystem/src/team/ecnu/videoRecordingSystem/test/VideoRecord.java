@@ -1,47 +1,57 @@
 
 package team.ecnu.videoRecordingSystem.test;
- 
+
 import static org.bytedeco.javacpp.opencv_imgcodecs.cvLoadImage;
- 
+
 import java.awt.AWTException;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.awt.datatransfer.Transferable;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
- 
+
 import javax.imageio.ImageIO;
+import javax.print.attribute.standard.PrinterMessageFromOperator;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.Mixer;
 import javax.sound.sampled.TargetDataLine;
- 
+
 import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacpp.avutil;
 import org.bytedeco.javacpp.opencv_core;
 import org.bytedeco.javacpp.opencv_core.IplImage;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.FrameRecorder.Exception;
+
+import team.ecnu.videoRecordingSystem.gui.Gui;
+import team.ecnu.videoRecordingSystem.rasr.RASRtest;
+import team.ecnu.videoRecordingSystem.util.CmdExecuter;
+
 import org.bytedeco.javacv.OpenCVFrameConverter;
- 
+
 /**
  * 使用javacv进行录屏
  * 
  * @author xukejia
  *
- *亲测每秒截5幅图片的效果是最好的，截多了会丢帧
+ *         亲测每秒截5幅图片的效果是最好的，截多了会丢帧
  *
  */
 public class VideoRecord {
 	private ScheduledThreadPoolExecutor screenTimer;
+	//录屏分辨率，我的macbook air是1440*900，可随意调整
 	private final Rectangle rectangle = new Rectangle(1440, 900);
 	private FFmpegFrameRecorder recorder;
 	private Robot robot;
@@ -57,8 +67,8 @@ public class VideoRecord {
 	private long startTime = 0;
 	private long videoTS = 0;
 	private long pauseTime = 0;
-	private double frameRate=5;
- 
+	private double frameRate = 5;
+
 	public VideoRecord(String fileName, boolean isHaveDevice) {
 		// TODO Auto-generated constructor stub
 		recorder = new FFmpegFrameRecorder(fileName + ".mp4", 1440, 900);
@@ -69,7 +79,7 @@ public class VideoRecord {
 		// recorder.setFormat("mov,mp4,m4a,3gp,3g2,mj2,h264,ogg,MPEG4");
 		recorder.setSampleRate(44100);
 		recorder.setFrameRate(frameRate);
- 
+
 		recorder.setVideoQuality(0);
 		recorder.setVideoOption("crf", "23");
 		// 2000 kb/s, 720P视频的合理比特率范围
@@ -107,26 +117,26 @@ public class VideoRecord {
 		this.isHaveDevice = isHaveDevice;
 		this.fileName = fileName;
 	}
- 
+
 	public void start() {
- 
+
 		if (startTime == 0) {
 			startTime = System.currentTimeMillis();
 		}
 		if (pauseTime == 0) {
 			pauseTime = System.currentTimeMillis();
 		}
-		
+
 		if (isHaveDevice) {
 			new Thread(new Runnable() {
- 
+
 				@Override
 				public void run() {
 					// TODO Auto-generated method stub
 					caputre();
 				}
 			}).start();
- 
+
 		}
 		screenTimer = new ScheduledThreadPoolExecutor(1);
 		screenTimer.scheduleAtFixedRate(new Runnable() {
@@ -146,7 +156,8 @@ public class VideoRecord {
 					// videoGraphics.drawImage(screenCapture, 0, 0, null);
 					IplImage image = cvLoadImage(name); // 非常吃内存！！
 					// 创建一个 timestamp用来写入帧中
-					videoTS = 1000 * (System.currentTimeMillis() - startTime - (System.currentTimeMillis() - pauseTime));
+					videoTS = 1000
+							* (System.currentTimeMillis() - startTime - (System.currentTimeMillis() - pauseTime));
 					// 检查偏移量
 					if (videoTS > recorder.getTimestamp()) {
 						recorder.setTimestamp(videoTS);
@@ -160,9 +171,9 @@ public class VideoRecord {
 				}
 			}
 		}, (int) (1000 / frameRate), (int) (1000 / frameRate), TimeUnit.MILLISECONDS);
- 
+
 	}
- 
+
 	public void caputre() {
 		audioFormat = new AudioFormat(44100.0F, 16, 2, true, false);
 		dataLineInfo = new DataLine.Info(TargetDataLine.class, audioFormat);
@@ -179,13 +190,13 @@ public class VideoRecord {
 			e1.printStackTrace();
 		}
 		line.start();
- 
+
 		int sampleRate = (int) audioFormat.getSampleRate();
 		int numChannels = audioFormat.getChannels();
- 
+
 		int audioBufferSize = sampleRate * numChannels;
 		byte[] audioBytes = new byte[audioBufferSize];
- 
+
 		exec = new ScheduledThreadPoolExecutor(1);
 		exec.scheduleAtFixedRate(new Runnable() {
 			@Override
@@ -194,12 +205,12 @@ public class VideoRecord {
 					int nBytesRead = line.read(audioBytes, 0, line.available());
 					int nSamplesRead = nBytesRead / 2;
 					short[] samples = new short[nSamplesRead];
- 
+
 					// Let's wrap our short[] into a ShortBuffer and
 					// pass it to recordSamples
 					ByteBuffer.wrap(audioBytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(samples);
 					ShortBuffer sBuff = ShortBuffer.wrap(samples, 0, nSamplesRead);
- 
+
 					// recorder is instance of
 					// org.bytedeco.javacv.FFmpegFrameRecorder
 					recorder.recordSamples(sampleRate, numChannels, sBuff);
@@ -210,11 +221,11 @@ public class VideoRecord {
 			}
 		}, (int) (1000 / frameRate), (int) (1000 / frameRate), TimeUnit.MILLISECONDS);
 	}
- 
+
 	public void stop() {
-		if (null!=screenTimer) {
+		if (null != screenTimer) {
 			screenTimer.shutdownNow();
-		}		
+		}
 		try {
 			recorder.stop();
 			recorder.release();
@@ -222,13 +233,13 @@ public class VideoRecord {
 			screenTimer = null;
 			screenCapture = null;
 			if (isHaveDevice) {
-				if (null !=exec) {
+				if (null != exec) {
 					exec.shutdownNow();
 				}
-				if (null!=line) {
+				if (null != line) {
 					line.stop();
 					line.close();
-				}				
+				}
 				dataLineInfo = null;
 				audioFormat = null;
 			}
@@ -236,9 +247,9 @@ public class VideoRecord {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
- 
+
 	}
- 
+
 	public void pause() throws Exception {
 		screenTimer.shutdownNow();
 		screenTimer = null;
@@ -249,19 +260,45 @@ public class VideoRecord {
 			line.close();
 			dataLineInfo = null;
 			audioFormat = null;
-			line=null;
+			line = null;
 		}
 		pauseTime = System.currentTimeMillis();
 	}
- 
+
+	// 从视频中提取声音并转为语音识别推荐格式
+	public static void transfer(String fileName) {
+		List<String> cmd = new ArrayList<String>();
+		cmd.clear();
+		cmd.add("ffmpeg/bin/ffmpeg");
+		cmd.add("-i");
+		cmd.add(fileName+".mp4");
+		cmd.add("-f");
+		cmd.add("wav");
+		cmd.add("-ac");
+		cmd.add(Integer.toString(1));
+		cmd.add("-ar");
+		cmd.add(Integer.toString(8000));
+		cmd.add(fileName+".wav");
+		CmdExecuter.exec(cmd);
+	}
+
 	public static void main(String[] args) throws Exception, AWTException {
-		VideoRecord videoRecord = new VideoRecord("output.mp4", true);
+		//生成的文件名
+		String fileName="output";
+		
+		VideoRecord videoRecord = new VideoRecord(fileName, true);
+
 		videoRecord.start();
 		while (true) {
 			System.out.println("你要停止吗？请输入(stop)，程序会停止。");
 			Scanner sc = new Scanner(System.in);
 			if (sc.next().equalsIgnoreCase("stop")) {
 				videoRecord.stop();
+				transfer(fileName);
+				//调用语音识别接口
+				RASRtest.main(args);
+				//展示滚动字幕
+				Gui.main(args);
 			}
 			if (sc.next().equalsIgnoreCase("pause")) {
 				videoRecord.pause();
@@ -271,5 +308,5 @@ public class VideoRecord {
 			}
 		}
 	}
- 
+
 }
